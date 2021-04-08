@@ -1,0 +1,27 @@
+---
+# tasks file for 00-base
+
+- name: Reboot system if required
+  command: shutdown -r now 'Rebooting to complete system upgrade'
+            removes=/var/run/reboot-required
+
+- name: update packages
+  apt:
+    name: '*'
+    state: latest
+
+- name: install packages
+  apt: 
+    name: '{{ item }}'
+    state: latest
+  loop:
+    - apt-transport-https
+    - ca-certificates
+    - curl
+    - net-tools
+
+- name: set the hostname
+  hostname:
+    name: "rpi{{ 999 | random }}"
+    use: systemd
+  when: "'rpi' not in ansible_hostname"

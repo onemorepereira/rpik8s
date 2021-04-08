@@ -1,0 +1,37 @@
+---
+
+# 1. Set mode = IPVS
+# 2. Set strictARTP = true
+##################################
+#       CREATE NAMESPACE         #
+##################################
+- name: create metallb namespace
+  k8s:
+    state: present
+    definition: "{{ lookup('file', 'files/metallb-namespace.yml') }}"
+
+##################################
+#       DEPLOY MANIFEST          #
+##################################
+- name: create metallb resources
+  k8s:
+    state: present
+    definition: "{{ lookup('file', 'files/metallb-manifest.yml') }}"
+
+##################################
+#       MEMBERLIST SECRET        #
+##################################
+- name: check if metallb secret already exists
+  shell: |
+    kubectl get -n metallb-system secrets
+  register: metallb_check
+
+# If the secret doesn't exist; create it
+- name: secret check
+  shell: |
+    kubectl create \
+    secret generic \
+    -n metallb-system \
+    memberlist \
+    --from-literal=secretkey="$(openssl rand -base64 128)"
+  when: '"memberlist" not in metallb_check.stdout'

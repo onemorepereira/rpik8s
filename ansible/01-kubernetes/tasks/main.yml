@@ -1,0 +1,155 @@
+---
+# tasks file for 01-kubernetes
+
+##################################
+#         DOCKER RUNTIME         #
+##################################
+- block:
+  - name: install docker
+    package:
+      name: docker.io
+      state: latest
+
+  - name: enable docker service
+    systemd:
+      name: docker.service
+      state: started
+      enabled: yes
+
+  - name: tweak docker daemon settings
+    template:
+      src: templates/etc.docker.daemon.json.j2
+      dest: /etc/docker/daemon.json
+      owner: root
+      group: root
+  when: k8s_runtime == 'docker'
+
+##################################
+#       CONTAINERD RUNTIME       #
+##################################
+- block:
+  - name: configure containerd runtime drivers
+    template:
+      src: etc.modules-load.d.containerd.conf.j2
+      dest: /etc/modules-load.d/containerd.conf
+      owner: root
+      group: root
+
+  - name: install containerd
+    package:
+      name: containerd
+      state: latest
+
+  - name: create containerd runtime configuration directory
+    file:
+      path: /etc/containerd
+      state: directory
+
+  - name: create containerd runtime configuration
+    shell: |
+      containerd config default  /etc/containerd/config.toml
+    register: containerd_config
+
+  - name: show containerd configuration
+    debug:
+      var: containerd_config
+    when: k8s_debug is defined
+  when: k8s_runtime == 'containerd'
+
+- name: enable cgroups limit support
+  lineinfile:
+    path: /boot/firmware/cmdline.txt
+    regexp:  '.*'
+    backrefs: yes
+    line: 'net.ifnames=0 dwc_otg.lpm_enable=0 console=serial0,115200 console=tty1 root=LABEL=writable rootfstype=ext4 elevator=deadline rootwait fixrtc cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1 swapaccount=1'
+  register: cgroup_changed
+
+- name: reboot node if changes were detected
+  shell: "reboot"
+  async: 1
+  poll: 0
+  when: cgroup_changed is changed
+
+- name: wait for the node to come back online
+  wait_for_connection:
+    connect_timeout: 20
+    sleep: 5
+    delay: 5
+    timeout: 300
+  when: cgroup_changed is changed
+
+- name: allow iptables to see bridged traffic (ipv6)
+  sysctl:
+    name: net.bridge.bridge-nf-call-ip6tables
+    value: '1'
+    state: present
+    sysctl_file: /etc/sysctl.d/k8s.conf
+    reload: yes
+    sysctl_set: yes
+
+- name: allow iptables to see bridged traffic
+  sysctl:
+    name: net.bridge.bridge-nf-call-iptables
+    value: '1'
+    state: present
+    sysctl_file: /etc/sysctl.d/k8s.conf
+    reload: yes
+    sysctl_set: yes
+
+- name: allow iptables to forward traffic
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    state: present
+    sysctl_file: /etc/sysctl.d/k8s.conf
+    reload: yes
+    sysctl_set: yes
+
+- name: get GCP pub signing key
+  apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+
+- name: add kubernetes repos
+  apt_repository:
+    repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+    state: present
+    filename: kubernetes
+    validate_certs: no
+
+- name: install kubernetes system packages
+  apt: 
+    name: '{{ item }}'
+    state: latest
+  loop:
+    - kubelet
+    - kubeadm
+    - kubectl
+
+- name: freeze kubernetes packages
+  dpkg_selections:
+    name: '{{ item }}'
+    selection: hold
+  loop:
+    - kubelet
+    - kubeadm
+    - kubectl
+
+- name: initialize a control plane node
+  import_tasks: 00-master.yml
+  when: k8s_control_plane == 'yes'
+
+- name: install flannel
+  import_tasks: 10-flannel.yml
+  when: k8s_control_plane == 'yes'
+
+- name: install metrics-server
+  import_tasks: 11-metrics-server.yml
+  when: k8s_control_plane == 'yes'
+
+- name: install metallb
+  import_tasks: 12-metallb.yml
+  when: k8s_control_plane == 'yes'
+
+- name: initialize nodes
+  import_tasks: 20-nodes.yml
+  when: k8s_control_plane == 'no'

@@ -1,0 +1,62 @@
+---
+# tasks file for 01-kubernetes.master
+
+- name: install system packages
+  apt:
+    name: "{{ item }}"
+  loop:
+    - python3-pip
+
+- name: install ansible requirements
+  pip:
+    name: "{{ item }}"
+  loop:
+    - openshift >= "0.6"
+    - PyYAML >= "3.11"
+
+##################################
+#       CLUSTER BOOTSTRAP        #
+##################################
+- name: initialize the control plane
+  shell: |
+    kubeadm init \
+      --token=$(kubeadm token generate) \
+      --kubernetes-version=v{{ k8s_version_major }}.{{ k8s_version_minor }}.{{ k8s_version_patch }} \
+      --pod-network-cidr={{ k8s_pod_network_cidr }} >/root/kubeadmin.init
+  args:
+    creates: /root/kubeadmin.init
+
+- name: create .kube directory
+  file:
+    path: /root/.kube
+    state: directory
+
+- name: copy kubernetes/admin.conf to ~/.kube/config
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+    remote_src: yes
+
+##################################
+#  KUBEADMIN JOIN CONFIGURATION  #
+##################################
+- name: generate kubeadm join cluster command
+  shell: |
+    kubeadm token create --print-join-command
+  register: kube_join_command
+  tags:
+    - config
+
+- name: print stuff out
+  debug:
+    msg: "{{ kube_join_command.stdout }}"
+  when: k8s_debug is defined
+  tags:
+    - config
+
+- name: debug
+  debug:
+    var: kube_join_command
+  when: k8s_debug is defined
+  tags:
+    - config

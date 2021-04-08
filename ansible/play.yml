@@ -1,0 +1,11 @@
+---
+
+- name: Prepare RaspberryPi Compute for Kubernetes
+  gather_facts: true
+  hosts: all
+  become: yes
+  become_user: root
+
+  roles:
+    - role: 00-base
+    - role: 01-kubernetes

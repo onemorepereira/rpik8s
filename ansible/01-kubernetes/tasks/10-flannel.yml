@@ -1,0 +1,7 @@
+##################################
+#       FLANNEL CONTROLLER       #
+##################################
+- name: install flannel controller
+  k8s:
+    state: present
+    definition: "{{ lookup('file', 'files/kube-flannel.yml') }}"

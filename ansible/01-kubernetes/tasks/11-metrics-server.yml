@@ -1,0 +1,9 @@
+---
+
+##################################
+#       METRICS-SERVER           #
+##################################
+- name: install metrics-server
+  k8s:
+    state: present
+    definition: "{{ lookup('file', 'files/metrics-server.yml') }}"

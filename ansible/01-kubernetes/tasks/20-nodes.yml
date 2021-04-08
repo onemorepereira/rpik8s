@@ -1,0 +1,28 @@
+---
+# tasks file for 01-kubernetes.nodes
+
+- name: check node registration - test 1
+  stat:
+    path: /etc/kubernetes/pki/ca.crt
+  register: k8s_nodecheck_1
+
+- name: check node registration - test 2
+  stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: k8s_nodecheck_2
+
+- name: register the node
+  shell: |
+    {{ hostvars['192.168.86.65']['kube_join_command']['stdout'] }}
+  register: kube_join_result
+  when: not k8s_nodecheck_1.stat.exists and not k8s_nodecheck_2.stat.exists
+
+- name: node details
+  debug:
+    var: hostvars['192.168.86.65']['kube_join_command']['stdout']
+  when: k8s_debug is defined
+
+- name: registration debug results
+  debug:
+    var: kube_join_result
+  when: k8s_debug is defined
