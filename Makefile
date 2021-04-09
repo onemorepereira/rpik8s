@@ -42,9 +42,18 @@ burn:
 	sync;
 	@read -p "Remove the SD card and press enter to continue..." && \
 	read -p "Reconnect the SD card and press enter to continue..." && \
-	sleep 12 && \
-	cp network-config /run/media/$${USERNAME}/system-boot/network-config && \
-	sync
+	sleep 12;
+	@read -p "SSID: " SSID; \
+	read -p "Secret: " -s SECRET; \
+	cat network-config | sed "s^{{ssid}}^$${SSID}^" | \
+	sed "s^{{ssid-secret}}^$${SECRET}^" > .network-config; \
+	echo -e "\n"; \
+	unset SSID; \
+	unset SECRET; \
+	cp .network-config /run/media/$${USERNAME}/system-boot/network-config && \
+	sync; \
+	rm .network-config; \
+	echo -e "All done..."
 
 init:
 	@wget https://cdimage.ubuntu.com/releases/20.04.2/release/ubuntu-20.04.2-preinstalled-server-arm64+raspi.img.xz
