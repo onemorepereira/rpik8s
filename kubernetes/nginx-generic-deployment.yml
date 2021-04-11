@@ -18,11 +18,24 @@ spec:
         mylabel: MyNginx
     spec:
       hostNetwork: false
+      initContainers:
+        - name: init-nginx
+          image: busybox
+          command: ['sh', '-c', "env > /usr/share/nginx/html/index.html"]
+          volumeMounts:
+            - mountPath: /usr/share/nginx/html
+              name: nginx-cache
       containers:
         - name: nginx
           image: arm64v8/nginx
           ports:
             - containerPort: 80
+          volumeMounts:
+            - mountPath: /usr/share/nginx/html
+              name: nginx-cache
+      volumes:
+        - name: nginx-cache
+          emptyDir: {}
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
